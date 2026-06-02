@@ -58,6 +58,13 @@ suggestion chips. A client-side cart lets users add parts from any card.
 - **Tool-use agent over hardcoded flows.** Adding a capability is adding one tool +
   one datastore method — no branching logic to rewrite. This is the extensibility
   story: the same loop scales from 6 tools to 60.
+- **Diagnose-first troubleshooting.** For a symptom, the assistant behaves like a
+  repair advisor, not a vending machine: it clarifies ambiguous symptoms, suggests
+  free non-part checks first (clean the filter, check the hose, settings), then
+  surfaces the right part with *why* it could be the cause, and offers support only
+  as a last resort.
+- **No fabrication.** Part numbers, prices, and compatibility come only from tool
+  results — the model can give general repair advice but cannot invent catalog data.
 - **`appliance_type` is data, not code.** Scope ("fridge + dishwasher") is enforced
   by the system prompt and by data, not by hardcoded branches — extending to ovens
   later means adding data, not rewriting logic.
@@ -116,6 +123,9 @@ Open **http://localhost:3000**. The frontend calls the backend at
 - *The ice maker on my Whirlpool fridge is not working. How can I fix it?*
 - *I want a refund on my order* → hands off to support
 - *How do I fix my oven?* → politely declines (out of scope)
+
+A broader set of documented test cases (UI + API, with expected results and
+ready-to-run curl commands) lives in [test_cases.txt](test_cases.txt).
 
 ---
 
