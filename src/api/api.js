@@ -1,4 +1,4 @@
-const BACKEND_URL = "http://localhost:8000";
+const BACKEND_URL = "https://partselect-agent-production-28f1.up.railway.app";
 
 /**
  * Sends the full conversation history to the agent backend and returns
