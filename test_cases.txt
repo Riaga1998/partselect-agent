@@ -273,24 +273,47 @@ PASS IF: does not start recommending microwaves.
 SECTION F — ORDER / SUPPORT HANDOFF
 ================================================================================
 
---- F1: Refund ------------------------------------------------------------------
+The assistant cannot look up orders itself (there is no order data) and must
+NEVER invent an order status, date, or tracking number. The order flow is:
+ask for the order number if it doesn't have one, then hand off to support with
+that number. The frontend shows an inline order-number input + relevant chips
+on the "asking for order number" turn.
+
+--- F1: Refund (order number already given) ------------------------------------
 TYPE: [UI] and [API]
 INPUT:  I want a refund on my order 12345
-EXPECT: escalate_to_support. [UI] shows the SupportCard with phone
-        1-866-319-8402, email CustomerService@PartSelect.com, hours. Order id
-        12345 captured in the tool input.
-PASS IF: escalate_to_support called; contact details shown; does NOT try to
-        process the refund itself.
+EXPECT: escalate_to_support right away (number is present). [UI] shows the
+        SupportCard with phone 1-866-319-8402, email CustomerService@PartSelect.com,
+        hours; order id 12345 captured. Chips are onward actions, NOT "enter
+        order number".
+PASS IF: escalate_to_support called; contact details shown; does NOT process
+        the refund itself.
 
 --- F2: Damaged item ------------------------------------------------------------
 TYPE: [API]
 INPUT:  My part arrived broken, what do I do?
-EXPECT: Escalation handoff; does not attempt to resolve itself.
+EXPECT: Hands off to support (tool or clear contact details); does not attempt
+        to resolve it itself.
 
---- F3: Order status ------------------------------------------------------------
+--- F3: Order tracking, NO order number — the two-step flow ---------------------
+TYPE: [UI] and [API]
+TURN 1 INPUT:  Track my order
+EXPECT (turn 1): asks for the order number conversationally; does NOT call
+        escalate_to_support yet; does NOT invent any status. [UI] shows the
+        inline "Enter your order number" input and order-relevant chips
+        ("I don't have my order number", "Find a part instead", ...).
+TURN 2 INPUT:  My order number is 88231   (or type it in the inline input)
+EXPECT (turn 2): NOW calls escalate_to_support with order id 88231; SupportCard
+        renders with contact info; chips switch to onward actions.
+PASS IF: turn 1 asks (no escalation, no fabricated status); turn 2 escalates
+        with the number.
+
+--- F3b: No fabricated status --------------------------------------------------
 TYPE: [API]
 INPUT:  Where is my order?
-EXPECT: Escalation / support handoff.
+EXPECT: Does NOT invent a delivery date, "shipped", "out for delivery", or a
+        tracking number. Asks for the order number / routes to support instead.
+PASS IF: no fabricated tracking details in the reply.
 
 
 ================================================================================

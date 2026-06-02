@@ -5,6 +5,7 @@ import { marked } from "marked";
 import ProductCard from "./ProductCard";
 import SupportCard from "./SupportCard";
 import Chip from "./Chip";
+import OrderNumberInput from "./OrderNumberInput";
 
 // Chips shown under the greeting (no agent turn yet to generate them).
 const STARTER_CHIPS = [
@@ -69,6 +70,20 @@ function renderToolCards(toolCalls, addToCart) {
   return cards.length ? <div className="tool-cards">{cards}</div> : null;
 }
 
+// True when the assistant is asking the user for an order number (and hasn't
+// already handed off to support), so we offer an inline way to provide it.
+function awaitingOrderNumber(message) {
+  const text = (message.content || "").toLowerCase();
+  const asking =
+    text.includes("order number") ||
+    text.includes("order #") ||
+    text.includes("order id");
+  const alreadyEscalated = (message.tool_calls || []).some(
+    (c) => c.tool === "escalate_to_support"
+  );
+  return asking && !alreadyEscalated;
+}
+
 function ChatWindow({ addToCart }) {
   const defaultMessage = [{
     role: "assistant",
@@ -127,6 +142,14 @@ function ChatWindow({ addToCart }) {
           )}
 
           {message.role === "assistant" && renderToolCards(message.tool_calls, addToCart)}
+
+          {/* Inline order-number entry on the latest support-handoff turn */}
+          {message.role === "assistant" &&
+            index === lastIndex &&
+            !loading &&
+            awaitingOrderNumber(message) && (
+              <OrderNumberInput onSubmit={handleSend} />
+            )}
 
           {/* Suggestion chips: only under the latest assistant message, when idle */}
           {message.role === "assistant" &&

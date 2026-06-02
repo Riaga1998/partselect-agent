@@ -9,6 +9,7 @@ Tool registry lives in TOOLS. Adding a new capability = adding one entry here.
 """
 import json
 import os
+from typing import Optional
 from anthropic import Anthropic
 from dotenv import load_dotenv
 
@@ -34,7 +35,7 @@ You help customers:
 SCOPE RULES — strictly enforced:
 - Only answer questions about refrigerators and dishwashers.
 - If a question is about a different appliance (oven, washer, dryer, etc.) or is completely unrelated (weather, coding, etc.), politely decline and offer to help with fridges or dishwashers instead.
-- For order/billing/refund issues, always use the escalate_to_support tool — never try to handle those yourself.
+- For order tracking, order status, billing, refunds, returns, or damaged items: you cannot look these up yourself and must never invent an order status, date, or tracking detail. If the customer hasn't given an order number yet, ask for it conversationally first. Once you have an order number (now or from earlier in the chat), use the escalate_to_support tool to hand off to the support team with that number. Never try to resolve order/billing issues yourself.
 
 TROUBLESHOOTING APPROACH — diagnose first, sell second:
 You are a repair assistant, not just a parts catalog. When a customer describes a symptom:
@@ -230,6 +231,32 @@ def generate_suggestions(conversation: list[dict], answer: str) -> list[str]:
     return []
 
 
+def is_asking_for_order_number(text: str) -> bool:
+    """Heuristic: is the assistant's reply requesting an order number?"""
+    t = text.lower()
+    return "order number" in t or "order #" in t or "order id" in t
+
+
+def step_suggestions(tool_calls_log: list[dict], answer: str) -> Optional[list[str]]:
+    """Deterministic, step-appropriate chips based on the turn's state.
+
+    Returns a fixed chip list when the turn calls for specific next actions
+    (a support handoff, or the assistant asking for an order number). Returns
+    None to fall back to the LLM-generated suggestions.
+    """
+    tools_used = {c["tool"] for c in tool_calls_log}
+
+    # Already handed off to support -> offer onward actions, not "enter it again".
+    if "escalate_to_support" in tools_used:
+        return ["Find a part instead", "Troubleshoot an issue", "Check part compatibility"]
+
+    # Assistant is asking for an order number (no handoff yet) -> help provide it.
+    if is_asking_for_order_number(answer):
+        return ["I don't have my order number", "Find a part instead", "Troubleshoot an issue"]
+
+    return None
+
+
 # --------------------------------------------------------------------------
 # Agent loop
 # --------------------------------------------------------------------------
@@ -260,7 +287,9 @@ def run_agent(conversation: list[dict]) -> dict:
             text = next(
                 (block.text for block in response.content if hasattr(block, "text")), ""
             )
-            suggestions = generate_suggestions(conversation, text)
+            suggestions = step_suggestions(tool_calls_log, text)
+            if suggestions is None:
+                suggestions = generate_suggestions(conversation, text)
             return {
                 "role": "assistant",
                 "content": text,

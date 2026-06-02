@@ -1,0 +1,35 @@
+.order-input {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0 4px;
+  width: 100%;
+  max-width: 360px;
+}
+
+.order-input-field {
+  flex: 1;
+  padding: 9px 12px;
+  border: 1px solid var(--ps-border);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.order-input-field:focus {
+  outline: none;
+  border-color: var(--ps-green);
+}
+
+.order-input-submit {
+  padding: 9px 16px;
+  border: none;
+  border-radius: 8px;
+  background: var(--ps-green);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.order-input-submit:hover {
+  background: var(--ps-green-dark);
+}
