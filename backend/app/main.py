@@ -4,23 +4,33 @@ FastAPI server — the bridge between the React frontend and the agent loop.
 One endpoint: POST /chat
 Receives the conversation history, runs the agent, returns the response.
 """
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from fastapi.responses import JSONResponse
 
 from .agent import run_agent
 
 app = FastAPI(title="PartSelect Agent API")
 
+
 # Allow the React dev server (localhost:3000) to call this backend
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://partselect-agent-2zd--projects.vercel.app", "https://*.vercel.app"],
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_credentials=False,
 )
 
+@app.options("/chat")
+async def options_chat():
+    return JSONResponse(content={}, headers={
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "*",
+    })
 
 class Message(BaseModel):
     role: str      # "user" or "assistant"
