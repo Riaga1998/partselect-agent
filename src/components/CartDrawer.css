@@ -1,0 +1,126 @@
+.cart-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+  z-index: 40;
+}
+
+.cart-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.cart-drawer {
+  position: fixed;
+  top: 0;
+  right: 50%;
+  transform: translateX(100%);
+  margin-right: -240px;          /* align to the 480px app column's right edge */
+  width: 340px;
+  max-width: 90vw;
+  height: 100vh;
+  background: #ffffff;
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.15);
+  z-index: 41;
+  transition: transform 0.22s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+.cart-drawer.open {
+  transform: translateX(0);
+}
+
+.cart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 18px 14px;
+  font-weight: 700;
+  font-size: 16px;
+  background: var(--ps-green);
+  color: #ffffff;
+}
+
+.cart-close {
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.cart-empty {
+  padding: 24px 18px;
+  color: #7a7a7a;
+  font-size: 14px;
+}
+
+.cart-items {
+  list-style: none;
+  margin: 0;
+  padding: 8px 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.cart-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--ps-border);
+}
+
+.cart-item-info { min-width: 0; }
+
+.cart-item-name {
+  display: block;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.cart-item-meta {
+  font-size: 12px;
+  color: #7a7a7a;
+}
+
+.cart-item-right {
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.cart-item-line {
+  display: block;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.cart-item-remove {
+  background: transparent;
+  border: none;
+  color: #b04a3a;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.cart-item-remove:hover { text-decoration: underline; }
+
+.cart-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px;
+  border-top: 1px solid var(--ps-border);
+  font-weight: 600;
+}
+
+.cart-subtotal {
+  font-weight: 700;
+  font-size: 18px;
+}

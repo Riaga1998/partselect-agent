@@ -1,0 +1,22 @@
+# Dependencies
+/node_modules
+backend/venv/
+backend/.venv/
+
+# Python
+__pycache__/
+*.pyc
+
+# Env / secrets
+.env
+backend/.env
+
+# Build output
+/build
+
+# OS / editor cruft
+.DS_Store
+**/.DS_Store
+
+# Scratch backup copy (not part of the submission)
+/files

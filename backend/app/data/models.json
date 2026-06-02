@@ -1,0 +1,34 @@
+[
+  {
+    "model_number": "WDT780SAEM1",
+    "brand": "Whirlpool",
+    "appliance_type": "dishwasher",
+    "description": "Whirlpool 24\" built-in tall-tub dishwasher",
+    "compatible_parts": ["PS11770107", "PS11722150", "PS11746337", "PS11753379", "PS11750673"],
+    "common_symptoms": ["Not draining", "Dishes not clean", "Won't start", "Dishes not drying"]
+  },
+  {
+    "model_number": "WDF520PADM",
+    "brand": "Whirlpool",
+    "appliance_type": "dishwasher",
+    "description": "Whirlpool 24\" front-control built-in dishwasher",
+    "compatible_parts": ["PS11770107", "PS11746337"],
+    "common_symptoms": ["Not draining", "Won't start"]
+  },
+  {
+    "model_number": "ED5FVGXWS07",
+    "brand": "Whirlpool",
+    "appliance_type": "refrigerator",
+    "description": "Whirlpool 25 cu. ft. side-by-side refrigerator",
+    "compatible_parts": ["PS11752778", "PS11739035", "PS11738095", "PS2179605"],
+    "common_symptoms": ["Ice maker not making ice", "Door won't close", "Water tastes bad"]
+  },
+  {
+    "model_number": "WRS325FDAM04",
+    "brand": "Whirlpool",
+    "appliance_type": "refrigerator",
+    "description": "Whirlpool 25 cu. ft. side-by-side refrigerator",
+    "compatible_parts": ["PS11752778", "PS11739035", "PS11738095", "PS2179605", "PS12364199"],
+    "common_symptoms": ["Ice maker not making ice", "Not cooling", "Frost buildup"]
+  }
+]

@@ -1,70 +1,154 @@
-# Getting Started with Create React App
+# PartSelect Parts Assistant
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A chat agent for the PartSelect e-commerce site, scoped to **refrigerator and
+dishwasher parts**. It helps customers find parts, check model compatibility,
+walk through installations, diagnose symptoms, and hand off order/billing issues
+to support — and it stays firmly within that scope, declining anything else.
 
-## Available Scripts
+Built for the Instalily case study.
 
-In the project directory, you can run:
+---
 
-### `npm start`
+## Architecture
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+```
+┌─────────────────────┐      POST /chat       ┌──────────────────────────┐
+│  React frontend      │  ───────────────────▶ │  FastAPI backend          │
+│  (Create React App)  │   {messages:[...]}    │  (app/main.py)            │
+│                      │ ◀───────────────────  │                          │
+│  • Chat UI + cards   │   {content,           │  ┌────────────────────┐  │
+│  • Product cards     │    tool_calls,        │  │  Agent loop         │  │
+│  • Compatibility     │    suggestions}       │  │  (app/agent.py)     │  │
+│    banners           │                       │  │  Claude tool-use    │  │
+│  • Suggestion chips  │                       │  └─────────┬──────────┘  │
+│  • Functional cart   │                       │            │ tools        │
+└─────────────────────┘                       │  ┌─────────▼──────────┐  │
+                                               │  │  DataStore          │  │
+                                               │  │  (app/datastore.py) │  │
+                                               │  │  parts.json /       │  │
+                                               │  │  models.json        │  │
+                                               │  └────────────────────┘  │
+                                               └──────────────────────────┘
+```
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+**Agent loop** ([backend/app/agent.py](backend/app/agent.py)): Claude receives the
+conversation plus a tool registry, decides which tools to call, we execute them
+against the datastore and feed results back, and the loop repeats until Claude
+writes a final answer. The model never touches raw data — it only calls tools.
 
-### `npm test`
+**Tools** (one registry entry = one capability):
+`search_parts`, `get_part_details`, `check_compatibility`,
+`get_installation_guide`, `troubleshoot`, `escalate_to_support`.
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+**Data layer** ([backend/app/datastore.py](backend/app/datastore.py)): each public
+method maps 1:1 to a tool. The seed catalog is JSON, but the interface is written
+so it can be swapped for a real database or a vector store (for semantic part
+search) without touching the agent.
 
-### `npm run build`
+**Frontend** ([src/](src/)): a React chat interface in PartSelect branding. Assistant
+replies render as markdown prose **plus** structured components derived from the
+`tool_calls` the backend returns — product cards, compatibility banners (green /
+amber / grey by verdict), a support-handoff card, and agent-generated follow-up
+suggestion chips. A client-side cart lets users add parts from any card.
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+---
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+## Design decisions
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+- **Tool-use agent over hardcoded flows.** Adding a capability is adding one tool +
+  one datastore method — no branching logic to rewrite. This is the extensibility
+  story: the same loop scales from 6 tools to 60.
+- **`appliance_type` is data, not code.** Scope ("fridge + dishwasher") is enforced
+  by the system prompt and by data, not by hardcoded branches — extending to ovens
+  later means adding data, not rewriting logic.
+- **Structured rendering from `tool_calls`.** The backend already returns full part
+  objects and a `CompatibilityResult` with a `compatible: true|false|null` verdict,
+  so the frontend renders rich cards/banners without a separate API contract.
+- **Suggestion chips are agent-generated** (a cheap Haiku call) and constrained to
+  actions the assistant can actually perform.
+- **Graceful degradation.** Suggestion generation is non-fatal: any failure returns
+  an empty list and the chat continues.
 
-### `npm run eject`
+---
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+## Running locally
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+### Prerequisites
+- Node 18+ and npm
+- Python 3.9+
+- An Anthropic API key ([console.anthropic.com](https://console.anthropic.com))
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+### 1. Backend
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+```bash
+cd backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 
-## Learn More
+# Configure the API key
+cp env.example .env
+# then edit .env and set ANTHROPIC_API_KEY=sk-ant-...
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+# Run (from the backend/ directory)
+uvicorn app.main:app --reload --port 8000
+```
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+The backend serves `POST /chat` and `GET /health` on `http://localhost:8000`.
 
-### Code Splitting
+### 2. Frontend
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+```bash
+# from the repo root
+npm install
+npm start
+```
 
-### Analyzing the Bundle Size
+Open **http://localhost:3000**. The frontend calls the backend at
+`http://localhost:8000` (see [src/api/api.js](src/api/api.js)).
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+---
 
-### Making a Progressive Web App
+## Example queries
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+- *How can I install part number PS11752778?*
+- *Is this part compatible with my WDT780SAEM1 model?*
+- *The ice maker on my Whirlpool fridge is not working. How can I fix it?*
+- *I want a refund on my order* → hands off to support
+- *How do I fix my oven?* → politely declines (out of scope)
 
-### Advanced Configuration
+---
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+## Project layout
 
-### Deployment
+```
+backend/
+  app/
+    main.py        FastAPI server — POST /chat, GET /health
+    agent.py       Claude tool-use loop + tool registry + suggestions
+    datastore.py   Catalog access; one method per tool
+    models.py      Pydantic schema (Part, ApplianceModel, CompatibilityResult)
+    data/          parts.json, models.json (seed catalog)
+  requirements.txt
+  env.example      copy to .env and add your key
+src/
+  App.js           App shell: PartSelect header, cart state
+  api/api.js       fetch wrapper for POST /chat
+  components/
+    ChatWindow.js  message list, renders cards/chips from tool_calls
+    ProductCard.js compatibility banner + add-to-cart
+    CartDrawer.js  client-side cart
+    SupportCard.js escalation handoff
+    Chip.js        suggestion chips
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+---
 
-### `npm run build` fails to minify
+## Possible extensions
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+- Swap the JSON seed for a real catalog DB + a vector store for semantic part
+  search (the `DataStore` interface stays identical).
+- Stream responses token-by-token for lower perceived latency.
+- Persist the cart and wire a real checkout/order-status backend.
+- Add part images (the schema already has `image_url`; the UI falls back to an
+  appliance glyph when it's null).

@@ -1,0 +1,30 @@
+.chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 4px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid var(--ps-border);
+  border-radius: 20px;
+  background: #ffffff;
+  color: var(--ps-text);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.chip:hover {
+  border-color: var(--ps-green);
+  background: #f4f8f7;
+}
+
+.chip-arrow {
+  color: #9a9a9a;
+  font-size: 12px;
+}
