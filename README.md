@@ -65,6 +65,11 @@ suggestion chips. A client-side cart lets users add parts from any card.
   as a last resort.
 - **No fabrication.** Part numbers, prices, and compatibility come only from tool
   results — the model can give general repair advice but cannot invent catalog data.
+- **Conversational order handoff.** Order/billing/tracking questions follow a natural
+  two-step flow: the assistant asks for the order number if it doesn't have one
+  (showing an inline order-number input and step-appropriate chips), then hands off
+  to support with that number. It never invents an order status or tracking detail —
+  there's no order data, so it routes to humans rather than guessing.
 - **`appliance_type` is data, not code.** Scope ("fridge + dishwasher") is enforced
   by the system prompt and by data, not by hardcoded branches — extending to ovens
   later means adding data, not rewriting logic.
@@ -121,6 +126,7 @@ Open **http://localhost:3000**. The frontend calls the backend at
 - *How can I install part number PS11752778?*
 - *Is this part compatible with my WDT780SAEM1 model?*
 - *The ice maker on my Whirlpool fridge is not working. How can I fix it?*
+- *Track my order* → asks for the order number, then hands off to support with it
 - *I want a refund on my order* → hands off to support
 - *How do I fix my oven?* → politely declines (out of scope)
 
@@ -150,6 +156,7 @@ src/
     CartDrawer.js  client-side cart
     SupportCard.js escalation handoff
     Chip.js        suggestion chips
+    OrderNumberInput.js  inline order-number entry on a support handoff
 ```
 
 ---
