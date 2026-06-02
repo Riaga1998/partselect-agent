@@ -13,10 +13,11 @@ from .agent import run_agent
 app = FastAPI(title="PartSelect Agent API")
 
 # Allow the React dev server (localhost:3000) to call this backend
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
-    allow_methods=["POST"],
+    allow_origins=["http://localhost:3000", "https://partselect-agent-2zd--projects.vercel.app", "https://*.vercel.app"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
