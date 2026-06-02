@@ -108,32 +108,50 @@ class DataStore:
         brand: Optional[str] = None, limit: int = 5,
     ) -> list[Part]:
         s = symptom.lower().strip()
-        key_words = [w for w in s.split() if len(w) > 3]
-        scored: list[tuple[int, Part]] = []
+        key_words = {w for w in s.split() if len(w) > 3}
+
+        # A word that appears in many parts' symptom lists is a weak signal
+        # ("ice", "door", "water"); a rare word is a strong one ("dirty",
+        # "drain", "leak"). Weight each matched word by how distinctive it is.
+        word_freq: dict[str, int] = {}
+        for p in self.parts.values():
+            seen = {w for sym in p.symptoms_fixed for w in sym.lower().split()}
+            for w in seen:
+                word_freq[w] = word_freq.get(w, 0) + 1
+        total_parts = max(len(self.parts), 1)
+
+        def word_weight(w: str) -> float:
+            # Rarer words count for more; very common words barely count.
+            freq = word_freq.get(w, 0)
+            return 1.0 if freq == 0 else max(0.1, 1.0 - freq / total_parts)
+
+        scored: list[tuple[float, Part]] = []
         for p in self.parts.values():
             if appliance_type and p.appliance_type != appliance_type:
                 continue
             if brand and brand.lower() not in [b.lower() for b in (p.compatible_brands + [p.brand])]:
                 continue
-            # Score each part by how well its listed symptoms match the query.
-            # Phrase containment is a strong signal; multiple shared key words is
-            # moderate; a single weak word is weak. We keep the best symptom's score.
-            best = 0
+            best = 0.0
             for sym in p.symptoms_fixed:
                 low = sym.lower()
                 if s in low or low in s:
-                    score = 5
+                    score = 10.0                       # phrase containment: strong
                 else:
-                    overlap = sum(1 for w in key_words if w in low)
-                    score = overlap
+                    matched = [w for w in key_words if w in low]
+                    score = sum(word_weight(w) for w in matched)
                 best = max(best, score)
-            # Require at least two matching key words (or a phrase hit) so parts
-            # that merely share one generic word ("ice", "door") drop out.
-            if best >= 2:
+            if best > 0:
                 scored.append((best, p))
-        # Rank by match strength first, then popularity as a tiebreaker.
+
+        if not scored:
+            return []
         scored.sort(key=lambda t: (t[0], t[1].review_count), reverse=True)
-        return [p for _, p in scored[:limit]]
+        # Keep genuine matches: parts close to the best score. This drops parts
+        # that only share one weak/generic word when stronger matches exist, but
+        # never returns empty when something matched.
+        top = scored[0][0]
+        kept = [p for sc, p in scored if sc >= max(0.5, top * 0.5)]
+        return kept[:limit]
 
 
 store = DataStore()

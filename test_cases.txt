@@ -1,0 +1,387 @@
+================================================================================
+PARTSELECT PARTS ASSISTANT — TEST CASES
+================================================================================
+
+Test cases derived from the case-study requirements and the features we built.
+Every part number and model number below is a REAL entry in the seed catalog, so
+each expected result is concrete and checkable.
+
+--------------------------------------------------------------------------------
+HOW TO EXECUTE TESTS (read this first)
+--------------------------------------------------------------------------------
+
+There are two kinds of test below:
+
+  [UI]  -> Run in the browser. Open http://localhost:3000, type the input into
+           the chat box, press Send, and check the result against "EXPECT".
+
+  [API] -> Run from a terminal with curl (no browser). Copy the command, run it,
+           and check the JSON output against "EXPECT". These prove the backend
+           behavior directly.
+
+Before testing, make sure BOTH servers are running:
+
+  Backend:   cd backend && source venv/bin/activate
+             uvicorn app.main:app --reload --port 8000
+  Frontend:  npm start         (from the repo root; opens localhost:3000)
+
+Quick health check:
+  curl -s http://localhost:8000/health
+  EXPECT: {"status":"ok"}
+
+The generic curl command shape used by all [API] tests:
+
+  curl -s -X POST http://localhost:8000/chat \
+    -H "Content-Type: application/json" \
+    -d '{"messages":[{"role":"user","content":"YOUR MESSAGE HERE"}]}'
+
+The response JSON has these fields:
+  content      -> the assistant's text answer (markdown)
+  tool_calls   -> list of {tool, input, result} the agent used
+  suggestions  -> list of follow-up chip strings
+
+Tip: pipe through "| python3 -m json.tool" to read it formatted, or
+"| python3 -c 'import sys,json; d=json.load(sys.stdin); print(d[\"content\"])'"
+to print just the answer.
+
+NOTE ON VARIABILITY: this is an LLM agent, so exact wording varies between runs,
+and for ambiguous symptoms it may lead with a clarifying question on one run and a
+part on another. The PASS conditions below are written to allow that — they check
+the behavior (right tool, right part, declines out-of-scope, gives DIY checks),
+not an exact string. The same logic is automated in /tmp/ps-verify/run_all.py,
+which runs the API cases and prints PASS/FAIL (21/21 expected).
+
+--------------------------------------------------------------------------------
+CATALOG REFERENCE (so you know the right answers)
+--------------------------------------------------------------------------------
+
+REFRIGERATOR PARTS:
+  PS11752778  Door Shelf Bin        $36.98   fits: ED5FVGXWS07, WRS325FDAM04, GS5SHAXNS00
+  PS11739035  Ice Maker Assembly    $96.83   fits: ED5FVGXWS07, WRS325FDAM04
+  PS11738095  Water Inlet Valve     $58.41   fits: ED5FVGXWS07, WRS325FDAM04
+  PS2179605   Water Filter          $49.99   fits: WRS325FDAM04, ED5FVGXWS07
+  PS12364199  Door Gasket Seal      $78.55   fits: WRS325FDAM04 ONLY
+
+DISHWASHER PARTS:
+  PS11770107  Drain Pump            $64.55   fits: WDT780SAEM1, WDF520PADM
+  PS11722150  Lower Spray Arm       $42.30   fits: WDT780SAEM1
+  PS11746337  Door Latch Assembly   $38.88   fits: WDT780SAEM1, WDF520PADM
+  PS11753379  Silverware Basket     $29.45   fits: WDT780SAEM1
+  PS11750673  Heating Element       $53.20   fits: WDT780SAEM1
+
+MODELS:
+  WDT780SAEM1   Whirlpool dishwasher
+  WDF520PADM    Whirlpool dishwasher
+  ED5FVGXWS07   Whirlpool refrigerator
+  WRS325FDAM04  Whirlpool refrigerator
+  GS5SHAXNS00   (referenced by a part but NOT in the models table -> "unknown model" path)
+
+
+================================================================================
+SECTION A — THE THREE REQUIRED EXAMPLE QUERIES
+================================================================================
+
+--- A1: Install by part number -------------------------------------------------
+TYPE: [UI] and [API]
+INPUT:  How can I install part number PS11752778?
+EXPECT: Agent calls get_installation_guide. Answer gives step-by-step install
+        instructions for the Door Shelf Bin, with difficulty (Easy) and time
+        (~5 min). [UI] also shows the product card.
+PASS IF: real steps shown; nothing fabricated.
+API CMD:
+  curl -s -X POST http://localhost:8000/chat -H "Content-Type: application/json" \
+    -d '{"messages":[{"role":"user","content":"How can I install part number PS11752778?"}]}'
+  Then confirm tool_calls includes "get_installation_guide".
+
+--- A2: Compatibility with a model ----------------------------------------------
+TYPE: [UI] and [API]
+INPUT:  Is part PS11752778 compatible with my WDT780SAEM1 model?
+EXPECT: Agent calls check_compatibility. Verdict = NOT COMPATIBLE (PS11752778 is a
+        fridge part; WDT780SAEM1 is a dishwasher). [UI] shows an AMBER banner with
+        a reason naming both appliance types.
+PASS IF: compatible=false; reason mentions fridge vs dishwasher; amber card.
+API CMD:
+  curl -s -X POST http://localhost:8000/chat -H "Content-Type: application/json" \
+    -d '{"messages":[{"role":"user","content":"Is part PS11752778 compatible with my WDT780SAEM1 model?"}]}'
+  In tool_calls, find check_compatibility -> result.compatible should be false.
+
+--- A3: Symptom diagnosis (the headline case) -----------------------------------
+TYPE: [UI] and [API]
+INPUT:  The ice maker on my Whirlpool fridge is not working. How can I fix it?
+EXPECT: Agent calls troubleshoot. Returns exactly TWO relevant parts:
+        Ice Maker Assembly (PS11739035) and Water Inlet Valve (PS11738095).
+        The Door Shelf Bin must NOT appear.
+PASS IF: only the two ice-maker parts; no loosely-related parts.
+API CMD:
+  curl -s -X POST http://localhost:8000/chat -H "Content-Type: application/json" \
+    -d '{"messages":[{"role":"user","content":"The ice maker on my Whirlpool fridge is not working. How can I fix it?"}]}'
+  In tool_calls -> troubleshoot -> result.candidate_parts should be PS11739035 and PS11738095.
+
+
+================================================================================
+SECTION B — COMPATIBILITY MATRIX (covers every branch)
+================================================================================
+
+--- B1: Compatible, same type, listed -------------------------------------------
+TYPE: [UI] and [API]
+INPUT:  Will PS11739035 fit my WRS325FDAM04?
+EXPECT: COMPATIBLE (green banner). Both fridge; the part lists the model.
+PASS IF: compatible=true.
+
+--- B2: Incompatible, cross-appliance -------------------------------------------
+TYPE: [API]
+INPUT:  Does the drain pump PS11770107 fit my WRS325FDAM04 fridge?
+EXPECT: NOT COMPATIBLE (amber). Dishwasher part vs fridge model.
+PASS IF: compatible=false; reason notes the appliance mismatch.
+
+--- B3: Incompatible WITHIN the same appliance type -----------------------------
+TYPE: [API]
+INPUT:  Is PS12364199 compatible with ED5FVGXWS07?
+EXPECT: NOT COMPATIBLE (amber). Both are fridge items, but the Door Gasket Seal
+        only fits WRS325FDAM04. Reason should say they're both fridge items and to
+        double-check the model number.
+PASS IF: compatible=false; reason is the "same type, not listed" wording.
+WHY IT MATTERS: proves it's not just doing fridge-vs-dishwasher; it checks the
+        actual model list.
+
+--- B4: Unknown model (graceful fallback) ---------------------------------------
+TYPE: [API]
+INPUT:  Is PS11752778 compatible with GS5SHAXNS00?
+EXPECT: The model isn't in the models table, but the part lists it, so the store
+        returns COMPATIBLE. No crash.
+PASS IF: answers compatible (or clearly explains it's listed by the part);
+        no error.
+
+--- B5: Nonexistent part --------------------------------------------------------
+TYPE: [API]
+INPUT:  Is PS00000000 compatible with WDT780SAEM1?
+EXPECT: Gracefully says the part isn't in the catalog. compatible=null. No
+        fabricated data, no crash.
+PASS IF: handled cleanly; no made-up part.
+
+
+================================================================================
+SECTION C — TROUBLESHOOTING / SYMPTOM DIAGNOSIS
+================================================================================
+
+The assistant is a REPAIR assistant, not just a parts catalog. A good
+troubleshooting answer does more than list parts to buy. Expect it to:
+  (a) ask a clarifying question when the symptom is ambiguous,
+  (b) give FREE non-part checks first (clean filter, check hose, settings, etc.),
+  (c) surface the likely part(s) via the troubleshoot tool, with WHY each one
+      could be the cause and how to tell,
+  (d) offer support only as a LAST RESORT ("if those checks don't fix it").
+Because the model decides per-message, a given symptom may lead with parts OR
+with clarifying questions — both are valid. The cases below check for that
+richer behavior, not just a part number.
+
+--- C1: Dishwasher not draining ------------------------------------------------
+TYPE: [UI] and [API]
+INPUT:  My dishwasher won't drain, there's standing water
+EXPECT: FREE checks first (clean filter/strainer, check drain hose for kinks,
+        garbage disposal knockout plug, air gap), AND the troubleshoot tool
+        surfaces the Drain Pump (PS11770107). Explains why the pump could be it.
+PASS IF: DIY checks present AND Drain Pump returned. (Card shows in [UI].)
+
+--- C2: Dishwasher not cleaning (ambiguous -> expect clarifying) ----------------
+TYPE: [UI] and [API]
+INPUT:  Dishes come out dirty after a cycle
+EXPECT: This symptom is ambiguous, so the assistant should ask a focused
+        clarifying question (whole load or just one rack? food residue vs film?
+        model number?) and give free checks (clean filter, detergent amount,
+        clear spray-arm holes). It may also surface Lower Spray Arm (PS11722150)
+        or Heating Element (PS11750673).
+PASS IF: EITHER it returns a relevant part, OR it asks a clarifying question
+        plus DIY checks. (Both are correct diagnose-first behavior.)
+
+--- C3: Fridge not cooling ------------------------------------------------------
+TYPE: [UI] and [API]
+INPUT:  My fridge isn't cooling and runs constantly
+EXPECT: Free checks (door seal, vents not blocked, temperature setting, coils)
+        AND troubleshoot surfaces the Door Gasket Seal (PS12364199).
+PASS IF: gasket present; DIY checks mentioned.
+
+--- C4: Vague symptom (relevance stress test) -----------------------------------
+TYPE: [UI]
+INPUT:  My fridge is broken
+EXPECT: Should ASK what's wrong (not cooling? leaking? noisy? ice maker?) rather
+        than dumping all five fridge parts. Narrows before recommending.
+PASS IF: it asks a clarifying question rather than listing everything.
+
+--- C5: Support offered only as last resort ------------------------------------
+TYPE: [UI]
+INPUT:  My dishwasher won't drain
+THEN:   I tried cleaning the filter and checking the hose, still not draining
+EXPECT: First answer leads with self-help, NOT escalation. After the user has
+        tried the checks, the assistant can point more firmly to the part and/or
+        offer support. Support should never be the FIRST thing offered for a
+        repairable symptom.
+PASS IF: turn 1 does not lead with "contact support"; self-help comes first.
+
+
+================================================================================
+SECTION D — PART SEARCH & DETAILS
+================================================================================
+
+--- D1: Search by category ------------------------------------------------------
+TYPE: [API]
+INPUT:  Show me dishwasher spray arms
+EXPECT: search_parts -> Lower Spray Arm (PS11722150).
+
+--- D2: Part details by number --------------------------------------------------
+TYPE: [UI] and [API]
+INPUT:  Tell me about PS2179605
+EXPECT: get_part_details -> Water Filter, $49.99, description, compatibility.
+PASS IF: correct part + correct price.
+
+--- D3: Price question (no fabrication) -----------------------------------------
+TYPE: [API]
+INPUT:  How much is the dishwasher heating element?
+EXPECT: $53.20 (PS11750673).
+PASS IF: exact price; never a made-up number.
+
+
+================================================================================
+SECTION E — SCOPE DISCIPLINE (must politely decline)
+================================================================================
+
+--- E1: Different appliance (oven) ----------------------------------------------
+TYPE: [UI] and [API]
+INPUT:  How do I fix my oven?
+EXPECT: Polite decline; offers fridge/dishwasher help. NO tool calls.
+PASS IF: tool_calls is empty AND it declines.
+
+--- E2: Different appliance (washer) --------------------------------------------
+TYPE: [API]
+INPUT:  My washing machine is leaking
+EXPECT: Decline + redirect to fridge/dishwasher.
+
+--- E3: Completely unrelated ----------------------------------------------------
+TYPE: [API]
+INPUT:  What's the weather today?
+ALSO:   Write me a Python script to sort a list
+EXPECT: Decline + redirect. NO tool calls.
+
+--- E4: Scope-adjacent trap (other appliance) -----------------------------------
+TYPE: [API]
+INPUT:  Can you recommend a good microwave to buy?
+EXPECT: Decline — microwaves are out of scope even though they're an appliance.
+PASS IF: does not start recommending microwaves.
+
+
+================================================================================
+SECTION F — ORDER / SUPPORT HANDOFF
+================================================================================
+
+--- F1: Refund ------------------------------------------------------------------
+TYPE: [UI] and [API]
+INPUT:  I want a refund on my order 12345
+EXPECT: escalate_to_support. [UI] shows the SupportCard with phone
+        1-866-319-8402, email CustomerService@PartSelect.com, hours. Order id
+        12345 captured in the tool input.
+PASS IF: escalate_to_support called; contact details shown; does NOT try to
+        process the refund itself.
+
+--- F2: Damaged item ------------------------------------------------------------
+TYPE: [API]
+INPUT:  My part arrived broken, what do I do?
+EXPECT: Escalation handoff; does not attempt to resolve itself.
+
+--- F3: Order status ------------------------------------------------------------
+TYPE: [API]
+INPUT:  Where is my order?
+EXPECT: Escalation / support handoff.
+
+
+================================================================================
+SECTION G — CONVERSATION & UX (mostly browser)
+================================================================================
+
+--- G1: Multi-turn context -----------------------------------------------------
+TYPE: [UI]
+STEPS:
+  Turn 1: My ice maker isn't working          (cards appear)
+  Turn 2: Does the first one fit my WRS325FDAM04?
+EXPECT: Agent resolves "the first one" to PS11739035 from context and checks
+        compatibility -> COMPATIBLE.
+PASS IF: it understands the reference without you re-typing the part number.
+
+--- G2: Suggestion chips are actionable -----------------------------------------
+TYPE: [UI]
+STEPS: Send any query; look at the chips under the answer.
+EXPECT: Chips reflect things the assistant CAN do (find part, check fit, install
+        steps, order help). Never "watch video" or anything out of scope.
+PASS IF: every chip maps to a real capability. Click one -> it sends that query.
+
+--- G3: Cart (add / increment / remove) -----------------------------------------
+TYPE: [UI]
+STEPS:
+  1. Ask "my ice maker isn't working" -> cards appear.
+  2. Click "Add to cart" on a card -> header badge shows 1.
+  3. Click "Add to cart" on the SAME card again -> badge shows 2.
+  4. Click the cart icon -> drawer opens; item listed with "x 2" and subtotal.
+  5. Click "Remove" -> item gone, badge back to 0.
+EXPECT: badge count, qty aggregation, subtotal, and removal all work.
+
+--- G4: Scroll-to-bottom button -------------------------------------------------
+TYPE: [UI]
+STEPS: In a long thread, scroll up.
+EXPECT: A floating down-arrow button appears; clicking it returns to the bottom.
+
+
+================================================================================
+SECTION H — ROBUSTNESS / EDGE CASES
+================================================================================
+
+--- H1: Empty messages array ----------------------------------------------------
+TYPE: [API]
+CMD:
+  curl -s -i -X POST http://localhost:8000/chat -H "Content-Type: application/json" \
+    -d '{"messages":[]}'
+EXPECT: HTTP 400 (Bad Request), not 500. Detail: "messages cannot be empty".
+PASS IF: status line shows 400.
+
+--- H2: Backend unreachable (frontend resilience) -------------------------------
+TYPE: [UI]
+STEPS: Stop the backend (Ctrl-C), then send a message in the browser.
+EXPECT: UI shows the friendly fallback: "Sorry, I couldn't reach the parts
+        assistant right now. Please try again in a moment." App does not crash.
+        (Restart the backend afterward.)
+
+--- H3: Gibberish ---------------------------------------------------------------
+TYPE: [API]
+INPUT:  asdfghjkl
+EXPECT: Graceful clarifying response; no crash; no fabricated parts.
+
+--- H4: Multi-tool single turn --------------------------------------------------
+TYPE: [API]
+INPUT:  Is PS11739035 compatible with WRS325FDAM04, and how do I install it?
+EXPECT: Agent may call multiple tools in one turn (check_compatibility +
+        get_installation_guide / get_part_details). Answer covers both. [UI]
+        de-dupes so the part card appears once, not twice.
+PASS IF: both questions answered; no duplicate cards in the UI.
+
+
+================================================================================
+ONE-LINE SMOKE TEST (paste-and-run sanity check)
+================================================================================
+
+Run this to confirm the four core behaviors quickly (backend must be on :8000):
+
+  for q in \
+    "How can I install part number PS11752778?" \
+    "Is part PS11752778 compatible with my WDT780SAEM1 model?" \
+    "The ice maker on my Whirlpool fridge is not working" \
+    "How do I fix my oven?"; do
+    echo "=== $q ==="
+    curl -s -X POST http://localhost:8000/chat -H "Content-Type: application/json" \
+      -d "{\"messages\":[{\"role\":\"user\",\"content\":\"$q\"}]}" \
+      | python3 -c "import sys,json; d=json.load(sys.stdin); print('tools:', [t['tool'] for t in d['tool_calls']]); print(d['content'][:200])"
+    echo
+  done
+
+EXPECT, in order:
+  1. tools: ['get_installation_guide', ...]   install steps
+  2. tools: ['check_compatibility', ...]      NOT compatible (fridge vs dishwasher)
+  3. tools: ['troubleshoot']                  ice maker assembly + water inlet valve
+  4. tools: []                                polite decline (out of scope)
